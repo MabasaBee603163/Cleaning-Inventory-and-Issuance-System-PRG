@@ -1,0 +1,47 @@
+# Compiled class files
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# Build / output
+out/
+build/
+bin/
+target/
+.gradle/
+cmake-build-*/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea_modules/
+
+# Package files
+*.zip
+*.tar.gz
+*.rar
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment / secrets
+.env
+.env.*
+*.local
+
+# Database / local config
+*.db
+*.sqlite
+*.sqlite3
