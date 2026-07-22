@@ -1,4 +1,4 @@
-package za.ac.belgiumcampus.cleaninginventory.view;
+package za.ac.belgiumcampus.cleaninginventory.ui;
 
 import za.ac.belgiumcampus.cleaninginventory.model.Material;
 import za.ac.belgiumcampus.cleaninginventory.model.Supplier;
