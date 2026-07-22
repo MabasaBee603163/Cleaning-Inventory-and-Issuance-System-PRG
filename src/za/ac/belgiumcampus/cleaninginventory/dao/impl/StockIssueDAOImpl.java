@@ -166,4 +166,98 @@ public class StockIssueDAOImpl implements StockIssueDAO {
     @Override
     public List<StockIssueItem> getIssueItems(long issueId) {
         List<StockIssueItem> items = new ArrayList<>();
-        String query = "SELECT i.*, m.material_name FROM stock_
+        String query = "SELECT i.*, m.material_name FROM stock_issue_items i " +
+                      "LEFT JOIN materials m ON i.material_id = m.material_id " +
+                      "WHERE i.issue_id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, issueId);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                StockIssueItem item = new StockIssueItem();
+                item.setIssueItemId(rs.getLong("issue_item_id"));
+                item.setIssueId(rs.getLong("issue_id"));
+                item.setMaterialId(rs.getLong("material_id"));
+                item.setQuantity(rs.getInt("quantity"));
+                item.setMaterialName(rs.getString("material_name"));
+                Timestamp timestamp = rs.getTimestamp("created_at");
+                if (timestamp != null) {
+                    item.setCreatedAt(timestamp.toLocalDateTime());
+                }
+                items.add(item);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return items;
+    }
+
+    @Override
+    public boolean deleteIssuance(long issueId) {
+        Connection conn = null;
+        try {
+            conn = DBConnection.getConnection();
+            conn.setAutoCommit(false);
+
+            String deleteItemsSQL = "DELETE FROM stock_issue_items WHERE issue_id = ?";
+            PreparedStatement deleteItemsStmt = conn.prepareStatement(deleteItemsSQL);
+            deleteItemsStmt.setLong(1, issueId);
+            deleteItemsStmt.executeUpdate();
+            deleteItemsStmt.close();
+
+            String deleteHeaderSQL = "DELETE FROM stock_issue_headers WHERE issue_id = ?";
+            PreparedStatement deleteHeaderStmt = conn.prepareStatement(deleteHeaderSQL);
+            deleteHeaderStmt.setLong(1, issueId);
+            int deleted = deleteHeaderStmt.executeUpdate();
+            deleteHeaderStmt.close();
+
+            conn.commit();
+            return deleted > 0;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            return false;
+        } finally {
+            try {
+                if (conn != null) conn.setAutoCommit(true);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public int getTotalIssuances() {
+        String query = "SELECT COUNT(*) FROM stock_issue_headers";
+        try (Connection conn = DBConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    private StockIssueHeader mapResultSetToHeader(ResultSet rs) throws SQLException {
+        StockIssueHeader header = new StockIssueHeader();
+        header.setIssueId(rs.getLong("issue_id"));
+        header.setCleanerId(rs.getLong("cleaner_id"));
+        header.setUserId(rs.getLong("user_id"));
+        header.setRemarks(rs.getString("remarks"));
+        Timestamp timestamp = rs.getTimestamp("issue_date");
+        if (timestamp != null) {
+            header.setIssueDate(timestamp.toLocalDateTime());
+        }
+        return header;
+    }
+}
