@@ -12,9 +12,6 @@ import za.ac.belgiumcampus.cleaninginventory.model.Supplier;
 
 import java.util.List;
 
-/**
- * Read-only reporting queries for the dashboard and inventory overview.
- */
 public class ReportService {
 
     private final MaterialDAO materialDAO;
@@ -32,11 +29,11 @@ public class ReportService {
     }
 
     public List<Material> getLowStockMaterials() {
-        return materialDAO.getMaterialsBelowReorderLevel();
+        return materialDAO.getLowStockMaterials();
     }
 
     public List<StockIssueHeader> getIssuedMaterials() {
-        return stockIssueDAO.getAllStockIssues();
+        return stockIssueDAO.getAllIssuances();
     }
 
     public List<Supplier> getSupplierInformation() {
@@ -44,18 +41,18 @@ public class ReportService {
     }
 
     public int getMaterialCount() {
-        return materialDAO.getAllMaterials().size();
+        return materialDAO.getTotalMaterials();
     }
 
     public int getSupplierCount() {
-        return supplierDAO.getAllSuppliers().size();
+        return supplierDAO.getTotalSuppliers();
     }
 
     public int getLowStockCount() {
-        return materialDAO.getMaterialsBelowReorderLevel().size();
+        return materialDAO.getLowStockCount();
     }
 
     public int getIssueCount() {
-        return stockIssueDAO.getAllStockIssues().size();
+        return stockIssueDAO.getTotalIssuances();
     }
 }

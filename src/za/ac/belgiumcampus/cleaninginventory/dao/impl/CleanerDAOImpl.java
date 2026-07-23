@@ -1,114 +1,156 @@
 package za.ac.belgiumcampus.cleaninginventory.dao.impl;
 
 import za.ac.belgiumcampus.cleaninginventory.dao.CleanerDAO;
-import za.ac.belgiumcampus.cleaninginventory.database.DBConnection;
 import za.ac.belgiumcampus.cleaninginventory.model.Cleaner;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import za.ac.belgiumcampus.cleaninginventory.database.DBConnection;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class CleanerDAOImpl implements CleanerDAO {
 
-    private static final String INSERT_SQL =
-            "INSERT INTO cleaners (first_name, last_name, phone, email, department) VALUES (?, ?, ?, ?, ?)";
-    private static final String UPDATE_SQL =
-            "UPDATE cleaners SET first_name = ?, last_name = ?, phone = ?, email = ?, department = ? WHERE cleaner_id = ?";
-    private static final String DELETE_SQL = "DELETE FROM cleaners WHERE cleaner_id = ?";
-    private static final String SELECT_BY_ID_SQL = "SELECT * FROM cleaners WHERE cleaner_id = ?";
-    private static final String SELECT_ALL_SQL = "SELECT * FROM cleaners ORDER BY cleaner_id";
-
     @Override
-    public void addCleaner(Cleaner cleaner) {
+    public boolean addCleaner(Cleaner cleaner) {
+        String query = "INSERT INTO cleaners (first_name, last_name, phone, email, department) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
-            stmt.setString(1, cleaner.getFirstName());
-            stmt.setString(2, cleaner.getLastName());
-            stmt.setString(3, cleaner.getPhone());
-            stmt.setString(4, cleaner.getEmail());
-            stmt.setString(5, cleaner.getDepartment());
-            stmt.executeUpdate();
-
-            try (ResultSet keys = stmt.getGeneratedKeys()) {
-                if (keys.next()) {
-                    cleaner.setCleanerId(keys.getLong(1));
+             PreparedStatement pstmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
+            pstmt.setString(1, cleaner.getFirstName());
+            pstmt.setString(2, cleaner.getLastName());
+            pstmt.setString(3, cleaner.getPhone());
+            pstmt.setString(4, cleaner.getEmail());
+            pstmt.setString(5, cleaner.getDepartment());
+            int affectedRows = pstmt.executeUpdate();
+            if (affectedRows > 0) {
+                ResultSet generatedKeys = pstmt.getGeneratedKeys();
+                if (generatedKeys.next()) {
+                    cleaner.setCleanerId(generatedKeys.getLong(1));
                 }
+                return true;
             }
+            return false;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to add cleaner: " + e.getMessage(), e);
+            e.printStackTrace();
+            return false;
         }
     }
 
     @Override
-    public void updateCleaner(Cleaner cleaner) {
+    public boolean updateCleaner(Cleaner cleaner) {
+        String query = "UPDATE cleaners SET first_name=?, last_name=?, phone=?, email=?, department=? WHERE cleaner_id=?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(UPDATE_SQL)) {
-            stmt.setString(1, cleaner.getFirstName());
-            stmt.setString(2, cleaner.getLastName());
-            stmt.setString(3, cleaner.getPhone());
-            stmt.setString(4, cleaner.getEmail());
-            stmt.setString(5, cleaner.getDepartment());
-            stmt.setLong(6, cleaner.getCleanerId());
-            stmt.executeUpdate();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, cleaner.getFirstName());
+            pstmt.setString(2, cleaner.getLastName());
+            pstmt.setString(3, cleaner.getPhone());
+            pstmt.setString(4, cleaner.getEmail());
+            pstmt.setString(5, cleaner.getDepartment());
+            pstmt.setLong(6, cleaner.getCleanerId());
+            return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to update cleaner: " + e.getMessage(), e);
+            e.printStackTrace();
+            return false;
         }
     }
 
     @Override
-    public void deleteCleaner(long cleanerId) {
+    public boolean deleteCleaner(long cleanerId) {
+        String query = "DELETE FROM cleaners WHERE cleaner_id = ?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(DELETE_SQL)) {
-            stmt.setLong(1, cleanerId);
-            stmt.executeUpdate();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, cleanerId);
+            return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to delete cleaner: " + e.getMessage(), e);
+            e.printStackTrace();
+            return false;
         }
     }
 
     @Override
     public Cleaner getCleanerById(long cleanerId) {
+        String query = "SELECT * FROM cleaners WHERE cleaner_id = ?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_BY_ID_SQL)) {
-            stmt.setLong(1, cleanerId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return mapRow(rs);
-                }
-                return null;
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, cleanerId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                Cleaner cleaner = new Cleaner();
+                cleaner.setCleanerId(rs.getLong("cleaner_id"));
+                cleaner.setFirstName(rs.getString("first_name"));
+                cleaner.setLastName(rs.getString("last_name"));
+                cleaner.setPhone(rs.getString("phone"));
+                cleaner.setEmail(rs.getString("email"));
+                cleaner.setDepartment(rs.getString("department"));
+                return cleaner;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get cleaner by id: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return null;
     }
 
     @Override
     public List<Cleaner> getAllCleaners() {
         List<Cleaner> cleaners = new ArrayList<>();
+        String query = "SELECT * FROM cleaners ORDER BY cleaner_id";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_ALL_SQL);
-             ResultSet rs = stmt.executeQuery()) {
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
             while (rs.next()) {
-                cleaners.add(mapRow(rs));
+                Cleaner cleaner = new Cleaner();
+                cleaner.setCleanerId(rs.getLong("cleaner_id"));
+                cleaner.setFirstName(rs.getString("first_name"));
+                cleaner.setLastName(rs.getString("last_name"));
+                cleaner.setPhone(rs.getString("phone"));
+                cleaner.setEmail(rs.getString("email"));
+                cleaner.setDepartment(rs.getString("department"));
+                cleaners.add(cleaner);
             }
-            return cleaners;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get all cleaners: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return cleaners;
     }
 
-    private Cleaner mapRow(ResultSet rs) throws SQLException {
-        Cleaner cleaner = new Cleaner();
-        cleaner.setCleanerId(rs.getLong("cleaner_id"));
-        cleaner.setFirstName(rs.getString("first_name"));
-        cleaner.setLastName(rs.getString("last_name"));
-        cleaner.setPhone(rs.getString("phone"));
-        cleaner.setEmail(rs.getString("email"));
-        cleaner.setDepartment(rs.getString("department"));
-        return cleaner;
+    @Override
+    public List<Cleaner> searchCleaners(String keyword) {
+        List<Cleaner> cleaners = new ArrayList<>();
+        String query = "SELECT * FROM cleaners WHERE LOWER(first_name) LIKE LOWER(?) OR LOWER(last_name) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?) OR LOWER(department) LIKE LOWER(?)";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            String searchPattern = "%" + keyword + "%";
+            pstmt.setString(1, searchPattern);
+            pstmt.setString(2, searchPattern);
+            pstmt.setString(3, searchPattern);
+            pstmt.setString(4, searchPattern);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                Cleaner cleaner = new Cleaner();
+                cleaner.setCleanerId(rs.getLong("cleaner_id"));
+                cleaner.setFirstName(rs.getString("first_name"));
+                cleaner.setLastName(rs.getString("last_name"));
+                cleaner.setPhone(rs.getString("phone"));
+                cleaner.setEmail(rs.getString("email"));
+                cleaner.setDepartment(rs.getString("department"));
+                cleaners.add(cleaner);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return cleaners;
+    }
+
+    @Override
+    public int getTotalCleaners() {
+        String query = "SELECT COUNT(*) FROM cleaners";
+        try (Connection conn = DBConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
     }
 }

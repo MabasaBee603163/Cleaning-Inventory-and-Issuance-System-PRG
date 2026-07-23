@@ -6,6 +6,7 @@ public enum UserRole {
 
     STOREKEEPER,
 
+    SUPERVISOR,
+
     CLEANER
-    
 }

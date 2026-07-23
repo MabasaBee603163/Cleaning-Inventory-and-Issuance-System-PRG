@@ -1,145 +1,169 @@
 package za.ac.belgiumcampus.cleaninginventory.dao.impl;
 
 import za.ac.belgiumcampus.cleaninginventory.dao.UserDAO;
-import za.ac.belgiumcampus.cleaninginventory.database.DBConnection;
-import za.ac.belgiumcampus.cleaninginventory.enums.UserRole;
 import za.ac.belgiumcampus.cleaninginventory.model.User;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
+import za.ac.belgiumcampus.cleaninginventory.enums.UserRole;
+import za.ac.belgiumcampus.cleaninginventory.database.DBConnection;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class UserDAOImpl implements UserDAO {
 
-    private static final String INSERT_SQL =
-            "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)";
-    private static final String UPDATE_SQL =
-            "UPDATE users SET username = ?, password_hash = ?, full_name = ?, email = ?, role = ? WHERE user_id = ?";
-    private static final String DELETE_SQL = "DELETE FROM users WHERE user_id = ?";
-    private static final String SELECT_BY_ID_SQL = "SELECT * FROM users WHERE user_id = ?";
-    private static final String SELECT_BY_USERNAME_SQL = "SELECT * FROM users WHERE username = ?";
-    private static final String SELECT_ALL_SQL = "SELECT * FROM users ORDER BY user_id";
-
     @Override
-    public void addUser(User user) {
+    public User authenticateUser(String username, String passwordHash) {
+        // Expects SHA-256 hex digest (AuthenticationService hashes before calling).
+        String query = "SELECT * FROM users WHERE username = ? AND password_hash = ?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
-            stmt.setString(1, user.getUsername());
-            stmt.setString(2, user.getPasswordHash());
-            stmt.setString(3, user.getFullName());
-            stmt.setString(4, user.getEmail());
-            stmt.setString(5, user.getRole() != null ? user.getRole().name() : null);
-            stmt.executeUpdate();
-
-            try (ResultSet keys = stmt.getGeneratedKeys()) {
-                if (keys.next()) {
-                    user.setUserId(keys.getLong(1));
-                }
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, username);
+            pstmt.setString(2, passwordHash);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return mapResultSetToUser(rs);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to add user: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return null;
     }
 
     @Override
-    public void updateUser(User user) {
+    public boolean addUser(User user) {
+        String query = "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(UPDATE_SQL)) {
-            stmt.setString(1, user.getUsername());
-            stmt.setString(2, user.getPasswordHash());
-            stmt.setString(3, user.getFullName());
-            stmt.setString(4, user.getEmail());
-            stmt.setString(5, user.getRole() != null ? user.getRole().name() : null);
-            stmt.setLong(6, user.getUserId());
-            stmt.executeUpdate();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, user.getUsername());
+            pstmt.setString(2, user.getPasswordHash());
+            pstmt.setString(3, user.getFullName());
+            pstmt.setString(4, user.getEmail());
+            pstmt.setString(5, user.getRole().name());
+            return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to update user: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public void deleteUser(long userId) {
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(DELETE_SQL)) {
-            stmt.setLong(1, userId);
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to delete user: " + e.getMessage(), e);
+            e.printStackTrace();
+            return false;
         }
     }
 
     @Override
     public User getUserById(long userId) {
+        String query = "SELECT * FROM users WHERE user_id = ?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_BY_ID_SQL)) {
-            stmt.setLong(1, userId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return mapRow(rs);
-                }
-                return null;
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, userId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return mapResultSetToUser(rs);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get user by id: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return null;
     }
 
     @Override
     public User getUserByUsername(String username) {
+        String query = "SELECT * FROM users WHERE username = ?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_BY_USERNAME_SQL)) {
-            stmt.setString(1, username);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return mapRow(rs);
-                }
-                return null;
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return mapResultSetToUser(rs);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get user by username: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return null;
     }
 
     @Override
     public List<User> getAllUsers() {
         List<User> users = new ArrayList<>();
+        String query = "SELECT * FROM users ORDER BY user_id";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_ALL_SQL);
-             ResultSet rs = stmt.executeQuery()) {
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
             while (rs.next()) {
-                users.add(mapRow(rs));
+                users.add(mapResultSetToUser(rs));
             }
-            return users;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get all users: " + e.getMessage(), e);
+            e.printStackTrace();
+        }
+        return users;
+    }
+
+    @Override
+    public boolean updateUser(User user) {
+        String query = "UPDATE users SET username=?, full_name=?, email=?, role=? WHERE user_id=?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, user.getUsername());
+            pstmt.setString(2, user.getFullName());
+            pstmt.setString(3, user.getEmail());
+            pstmt.setString(4, user.getRole().name());
+            pstmt.setLong(5, user.getUserId());
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
         }
     }
 
-    private User mapRow(ResultSet rs) throws SQLException {
+    @Override
+    public boolean deleteUser(long userId) {
+        String query = "DELETE FROM users WHERE user_id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, userId);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    @Override
+    public boolean usernameExists(String username) {
+        String query = "SELECT COUNT(*) FROM users WHERE username = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    @Override
+    public boolean emailExists(String email) {
+        String query = "SELECT COUNT(*) FROM users WHERE email = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, email);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private User mapResultSetToUser(ResultSet rs) throws SQLException {
         User user = new User();
         user.setUserId(rs.getLong("user_id"));
         user.setUsername(rs.getString("username"));
         user.setPasswordHash(rs.getString("password_hash"));
         user.setFullName(rs.getString("full_name"));
         user.setEmail(rs.getString("email"));
-
-        String role = rs.getString("role");
-        if (role != null && !role.isBlank()) {
-            user.setRole(UserRole.valueOf(role.trim().toUpperCase()));
-        }
-
-        Timestamp createdAt = rs.getTimestamp("created_at");
-        if (createdAt != null) {
-            user.setCreatedAt(createdAt.toLocalDateTime());
-        } else {
-            user.setCreatedAt(LocalDateTime.now());
-        }
+        user.setRole(UserRole.valueOf(rs.getString("role")));
+        user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
         return user;
     }
 }

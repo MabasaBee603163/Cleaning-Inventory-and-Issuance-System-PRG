@@ -18,11 +18,10 @@ public class LoginController {
 
     public ActionResult<User> login(String username, String password) {
         try {
-            User user = authenticationService.login(username, password);
-            if (user == null) {
+            if (!authenticationService.login(username, password)) {
                 return ActionResult.fail("Invalid username or password");
             }
-            return ActionResult.ok("Login successful", user);
+            return ActionResult.ok("Login successful", authenticationService.getCurrentUser());
         } catch (IllegalArgumentException e) {
             return ActionResult.fail(e.getMessage());
         } catch (RuntimeException e) {

@@ -16,6 +16,9 @@ public class Material {
 
     private long supplierId;
 
+    /** Display-only field populated by JOIN queries (not a DB column on materials). */
+    private String supplierName;
+
     public Material() {}
 
     public Material(long materialId, String materialName, String description, int quantity, String unit, int reorderLevel, long supplierId) {
@@ -84,7 +87,19 @@ public class Material {
 
     public void setSupplierId(long supplierId) {
         this.supplierId = supplierId;
-    }   
+    }
+
+    public String getSupplierName() {
+        return supplierName;
+    }
+
+    public void setSupplierName(String supplierName) {
+        this.supplierName = supplierName;
+    }
+
+    public boolean isLowStock() {
+        return quantity <= reorderLevel;
+    }
 
     //tostring
     @Override

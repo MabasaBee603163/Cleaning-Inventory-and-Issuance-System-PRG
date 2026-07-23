@@ -4,19 +4,14 @@ import za.ac.belgiumcampus.cleaninginventory.model.Material;
 import java.util.List;
 
 public interface MaterialDAO {
-
-    void addMaterial(Material material);
-
-    void updateMaterial(Material material);
-
-    void deleteMaterial(long materialId);
-
+    boolean addMaterial(Material material);
+    boolean updateMaterial(Material material);
+    boolean deleteMaterial(long materialId);
     Material getMaterialById(long materialId);
-
     List<Material> getAllMaterials();
-
-    List<Material> getMaterialsBelowReorderLevel();
-
-    void reduceQuantity(long materialId, int amount);
+    List<Material> searchMaterials(String keyword);
+    List<Material> getLowStockMaterials();
+    boolean updateStock(long materialId, int newQuantity);
+    int getTotalMaterials();
+    int getLowStockCount();
 }
-

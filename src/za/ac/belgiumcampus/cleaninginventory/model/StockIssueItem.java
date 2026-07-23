@@ -1,13 +1,16 @@
 package za.ac.belgiumcampus.cleaninginventory.model;
 
+import java.time.LocalDateTime;
+
 public class StockIssueItem {
     private long issueItemId;
-
     private long issueId;
-
     private long materialId;
-
     private int quantity;
+
+    /** Display-only fields from JOIN queries. */
+    private String materialName;
+    private LocalDateTime createdAt;
 
     public StockIssueItem() {}
 
@@ -17,8 +20,6 @@ public class StockIssueItem {
         this.materialId = materialId;
         this.quantity = quantity;
     }
-
-    //Getters
 
     public long getIssueItemId() {
         return issueItemId;
@@ -36,7 +37,13 @@ public class StockIssueItem {
         return quantity;
     }
 
-    //Setters
+    public String getMaterialName() {
+        return materialName;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
 
     public void setIssueItemId(long issueItemId) {
         this.issueItemId = issueItemId;
@@ -54,14 +61,22 @@ public class StockIssueItem {
         this.quantity = quantity;
     }
 
-    //tostring
+    public void setMaterialName(String materialName) {
+        this.materialName = materialName;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
     @Override
-    public String toString() {      
+    public String toString() {
         return "StockIssueItem{" +
-            "issueItemId=" + issueItemId +
-            ", issueId=" + issueId +
-            ", materialId=" + materialId +
-            ", quantity=" + quantity +
-            '}';
+                "issueItemId=" + issueItemId +
+                ", issueId=" + issueId +
+                ", materialId=" + materialId +
+                ", quantity=" + quantity +
+                ", materialName='" + materialName + '\'' +
+                '}';
     }
 }

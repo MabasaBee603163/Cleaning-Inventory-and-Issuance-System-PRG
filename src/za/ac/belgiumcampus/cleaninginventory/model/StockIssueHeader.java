@@ -12,6 +12,10 @@ public class StockIssueHeader {
     private String remarks;
     private List<StockIssueItem> items = new ArrayList<>();
 
+    /** Display-only fields from JOIN queries. */
+    private String cleanerName;
+    private String userName;
+
     public StockIssueHeader() {}
 
     public StockIssueHeader(long issueId, long cleanerId, long userId, LocalDateTime issueDate, String remarks) {
@@ -68,6 +72,22 @@ public class StockIssueHeader {
 
     public void setItems(List<StockIssueItem> items) {
         this.items = items != null ? items : new ArrayList<>();
+    }
+
+    public String getCleanerName() {
+        return cleanerName;
+    }
+
+    public void setCleanerName(String cleanerName) {
+        this.cleanerName = cleanerName;
+    }
+
+    public String getUserName() {
+        return userName;
+    }
+
+    public void setUserName(String userName) {
+        this.userName = userName;
     }
 
     @Override

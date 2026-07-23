@@ -1,164 +1,192 @@
 package za.ac.belgiumcampus.cleaninginventory.dao.impl;
 
 import za.ac.belgiumcampus.cleaninginventory.dao.MaterialDAO;
-import za.ac.belgiumcampus.cleaninginventory.database.DBConnection;
 import za.ac.belgiumcampus.cleaninginventory.model.Material;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import za.ac.belgiumcampus.cleaninginventory.database.DBConnection;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class MaterialDAOImpl implements MaterialDAO {
 
-    private static final String INSERT_SQL =
-            "INSERT INTO materials (material_name, description, quantity, unit, reorder_level, supplier_id) "
-                    + "VALUES (?, ?, ?, ?, ?, ?)";
-    private static final String UPDATE_SQL =
-            "UPDATE materials SET material_name = ?, description = ?, quantity = ?, unit = ?, "
-                    + "reorder_level = ?, supplier_id = ? WHERE material_id = ?";
-    private static final String DELETE_SQL = "DELETE FROM materials WHERE material_id = ?";
-    private static final String SELECT_BY_ID_SQL = "SELECT * FROM materials WHERE material_id = ?";
-    private static final String SELECT_ALL_SQL = "SELECT * FROM materials ORDER BY material_id";
-    private static final String SELECT_BELOW_REORDER_SQL =
-            "SELECT * FROM materials WHERE quantity <= reorder_level ORDER BY material_id";
-    private static final String REDUCE_QUANTITY_SQL =
-            "UPDATE materials SET quantity = quantity - ? WHERE material_id = ? AND quantity >= ?";
-
     @Override
-    public void addMaterial(Material material) {
+    public boolean addMaterial(Material material) {
+        String query = "INSERT INTO materials (material_name, description, quantity, unit, reorder_level, supplier_id) VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
-            bindMaterial(stmt, material);
-            stmt.executeUpdate();
-
-            try (ResultSet keys = stmt.getGeneratedKeys()) {
-                if (keys.next()) {
-                    material.setMaterialId(keys.getLong(1));
+             PreparedStatement pstmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
+            pstmt.setString(1, material.getMaterialName());
+            pstmt.setString(2, material.getDescription());
+            pstmt.setInt(3, material.getQuantity());
+            pstmt.setString(4, material.getUnit());
+            pstmt.setInt(5, material.getReorderLevel());
+            pstmt.setLong(6, material.getSupplierId());
+            int affectedRows = pstmt.executeUpdate();
+            if (affectedRows > 0) {
+                ResultSet generatedKeys = pstmt.getGeneratedKeys();
+                if (generatedKeys.next()) {
+                    material.setMaterialId(generatedKeys.getLong(1));
                 }
+                return true;
             }
+            return false;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to add material: " + e.getMessage(), e);
+            e.printStackTrace();
+            return false;
         }
     }
 
     @Override
-    public void updateMaterial(Material material) {
+    public boolean updateMaterial(Material material) {
+        String query = "UPDATE materials SET material_name=?, description=?, quantity=?, unit=?, reorder_level=?, supplier_id=? WHERE material_id=?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(UPDATE_SQL)) {
-            bindMaterial(stmt, material);
-            stmt.setLong(7, material.getMaterialId());
-            stmt.executeUpdate();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, material.getMaterialName());
+            pstmt.setString(2, material.getDescription());
+            pstmt.setInt(3, material.getQuantity());
+            pstmt.setString(4, material.getUnit());
+            pstmt.setInt(5, material.getReorderLevel());
+            pstmt.setLong(6, material.getSupplierId());
+            pstmt.setLong(7, material.getMaterialId());
+            return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to update material: " + e.getMessage(), e);
+            e.printStackTrace();
+            return false;
         }
     }
 
     @Override
-    public void deleteMaterial(long materialId) {
+    public boolean deleteMaterial(long materialId) {
+        String query = "DELETE FROM materials WHERE material_id = ?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(DELETE_SQL)) {
-            stmt.setLong(1, materialId);
-            stmt.executeUpdate();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, materialId);
+            return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to delete material: " + e.getMessage(), e);
+            e.printStackTrace();
+            return false;
         }
     }
 
     @Override
     public Material getMaterialById(long materialId) {
+        String query = "SELECT m.*, s.supplier_name FROM materials m LEFT JOIN suppliers s ON m.supplier_id = s.supplier_id WHERE m.material_id = ?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_BY_ID_SQL)) {
-            stmt.setLong(1, materialId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return mapRow(rs);
-                }
-                return null;
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, materialId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                Material material = mapResultSetToMaterial(rs);
+                material.setSupplierName(rs.getString("supplier_name"));
+                return material;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get material by id: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return null;
     }
 
     @Override
     public List<Material> getAllMaterials() {
         List<Material> materials = new ArrayList<>();
+        String query = "SELECT m.*, s.supplier_name FROM materials m LEFT JOIN suppliers s ON m.supplier_id = s.supplier_id ORDER BY m.material_id";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_ALL_SQL);
-             ResultSet rs = stmt.executeQuery()) {
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
             while (rs.next()) {
-                materials.add(mapRow(rs));
+                Material material = mapResultSetToMaterial(rs);
+                material.setSupplierName(rs.getString("supplier_name"));
+                materials.add(material);
             }
-            return materials;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get all materials: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return materials;
     }
 
     @Override
-    public List<Material> getMaterialsBelowReorderLevel() {
+    public List<Material> searchMaterials(String keyword) {
         List<Material> materials = new ArrayList<>();
+        String query = "SELECT m.*, s.supplier_name FROM materials m LEFT JOIN suppliers s ON m.supplier_id = s.supplier_id WHERE LOWER(m.material_name) LIKE LOWER(?) OR LOWER(m.description) LIKE LOWER(?)";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_BELOW_REORDER_SQL);
-             ResultSet rs = stmt.executeQuery()) {
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            String searchPattern = "%" + keyword + "%";
+            pstmt.setString(1, searchPattern);
+            pstmt.setString(2, searchPattern);
+            ResultSet rs = pstmt.executeQuery();
             while (rs.next()) {
-                materials.add(mapRow(rs));
+                Material material = mapResultSetToMaterial(rs);
+                material.setSupplierName(rs.getString("supplier_name"));
+                materials.add(material);
             }
-            return materials;
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get materials below reorder level: " + e.getMessage(), e);
+            e.printStackTrace();
+        }
+        return materials;
+    }
+
+    @Override
+    public List<Material> getLowStockMaterials() {
+        List<Material> materials = new ArrayList<>();
+        String query = "SELECT m.*, s.supplier_name FROM materials m LEFT JOIN suppliers s ON m.supplier_id = s.supplier_id WHERE m.quantity < m.reorder_level ORDER BY m.material_id";
+        try (Connection conn = DBConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            while (rs.next()) {
+                Material material = mapResultSetToMaterial(rs);
+                material.setSupplierName(rs.getString("supplier_name"));
+                materials.add(material);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return materials;
+    }
+
+    @Override
+    public boolean updateStock(long materialId, int newQuantity) {
+        String query = "UPDATE materials SET quantity = ? WHERE material_id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setInt(1, newQuantity);
+            pstmt.setLong(2, materialId);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
         }
     }
 
     @Override
-    public void reduceQuantity(long materialId, int amount) {
+    public int getTotalMaterials() {
+        String query = "SELECT COUNT(*) FROM materials";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(REDUCE_QUANTITY_SQL)) {
-            stmt.setInt(1, amount);
-            stmt.setLong(2, materialId);
-            stmt.setInt(3, amount);
-            int updated = stmt.executeUpdate();
-            if (updated == 0) {
-                throw new RuntimeException("Insufficient stock or material not found for id " + materialId);
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                return rs.getInt(1);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to reduce material quantity: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return 0;
     }
 
-    /**
-     * Reduces quantity using an existing connection (for transactional stock issues).
-     */
-    public void reduceQuantity(Connection conn, long materialId, int amount) throws SQLException {
-        try (PreparedStatement stmt = conn.prepareStatement(REDUCE_QUANTITY_SQL)) {
-            stmt.setInt(1, amount);
-            stmt.setLong(2, materialId);
-            stmt.setInt(3, amount);
-            int updated = stmt.executeUpdate();
-            if (updated == 0) {
-                throw new SQLException("Insufficient stock or material not found for id " + materialId);
+    @Override
+    public int getLowStockCount() {
+        String query = "SELECT COUNT(*) FROM materials WHERE quantity < reorder_level";
+        try (Connection conn = DBConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                return rs.getInt(1);
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
+        return 0;
     }
 
-    private void bindMaterial(PreparedStatement stmt, Material material) throws SQLException {
-        stmt.setString(1, material.getMaterialName());
-        stmt.setString(2, material.getDescription());
-        stmt.setInt(3, material.getQuantity());
-        stmt.setString(4, material.getUnit());
-        stmt.setInt(5, material.getReorderLevel());
-        if (material.getSupplierId() > 0) {
-            stmt.setLong(6, material.getSupplierId());
-        } else {
-            stmt.setObject(6, null);
-        }
-    }
-
-    private Material mapRow(ResultSet rs) throws SQLException {
+    private Material mapResultSetToMaterial(ResultSet rs) throws SQLException {
         Material material = new Material();
         material.setMaterialId(rs.getLong("material_id"));
         material.setMaterialName(rs.getString("material_name"));
@@ -166,10 +194,7 @@ public class MaterialDAOImpl implements MaterialDAO {
         material.setQuantity(rs.getInt("quantity"));
         material.setUnit(rs.getString("unit"));
         material.setReorderLevel(rs.getInt("reorder_level"));
-        long supplierId = rs.getLong("supplier_id");
-        if (!rs.wasNull()) {
-            material.setSupplierId(supplierId);
-        }
+        material.setSupplierId(rs.getLong("supplier_id"));
         return material;
     }
 }

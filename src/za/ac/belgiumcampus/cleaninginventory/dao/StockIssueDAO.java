@@ -1,17 +1,15 @@
 package za.ac.belgiumcampus.cleaninginventory.dao;
 
 import za.ac.belgiumcampus.cleaninginventory.model.StockIssueHeader;
+import za.ac.belgiumcampus.cleaninginventory.model.StockIssueItem;
 import java.util.List;
 
 public interface StockIssueDAO {
-
-    void createStockIssue(StockIssueHeader stockIssue);
-
-    void updateStockIssue(StockIssueHeader stockIssue);
-
-    void deleteStockIssue(long issueId);
-
-    StockIssueHeader getStockIssueById(long issueId);
-
-    List<StockIssueHeader> getAllStockIssues();
+    boolean issueMaterials(long cleanerId, long userId, List<StockIssueItem> items, String remarks);
+    List<StockIssueHeader> getAllIssuances();
+    List<StockIssueHeader> getRecentIssuances(int limit);
+    StockIssueHeader getIssuanceById(long issueId);
+    List<StockIssueItem> getIssueItems(long issueId);
+    boolean deleteIssuance(long issueId);
+    int getTotalIssuances();
 }

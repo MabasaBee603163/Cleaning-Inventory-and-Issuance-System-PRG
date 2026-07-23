@@ -75,6 +75,12 @@ public class Cleaner {
         this.department = department;
     }
 
+    public String getFullName() {
+        String first = firstName != null ? firstName : "";
+        String last = lastName != null ? lastName : "";
+        return (first + " " + last).trim();
+    }
+
     //tostring
     @Override
     public String toString() {

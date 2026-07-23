@@ -4,14 +4,11 @@ import za.ac.belgiumcampus.cleaninginventory.model.Cleaner;
 import java.util.List;
 
 public interface CleanerDAO {
-
-    void addCleaner(Cleaner cleaner);
-
-    void updateCleaner(Cleaner cleaner);
-
-    void deleteCleaner(long cleanerId);
-
+    boolean addCleaner(Cleaner cleaner);
+    boolean updateCleaner(Cleaner cleaner);
+    boolean deleteCleaner(long cleanerId);
     Cleaner getCleanerById(long cleanerId);
-
     List<Cleaner> getAllCleaners();
+    List<Cleaner> searchCleaners(String keyword);
+    int getTotalCleaners();
 }

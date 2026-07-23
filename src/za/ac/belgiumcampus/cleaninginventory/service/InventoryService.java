@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Business rules for suppliers, materials, cleaners, and stock issuing.
+ * Business helpers for inventory operations used by controllers and the dashboard.
  */
 public class InventoryService {
 
@@ -40,24 +40,29 @@ public class InventoryService {
         this.stockIssueDAO = stockIssueDAO;
     }
 
-    // --- Suppliers ---
-
-    public void addSupplier(Supplier supplier) {
-        Validator.requireNotNull(supplier, "Supplier");
-        Validator.requireNonBlank(supplier.getSupplierName(), "Supplier name");
-        supplierDAO.addSupplier(supplier);
+    public int getTotalMaterials() {
+        return materialDAO.getTotalMaterials();
     }
 
-    public void updateSupplier(Supplier supplier) {
+    public int getLowStockCount() {
+        return materialDAO.getLowStockCount();
+    }
+
+    public boolean addSupplier(Supplier supplier) {
+        Validator.requireNotNull(supplier, "Supplier");
+        Validator.requireNonBlank(supplier.getSupplierName(), "Supplier name");
+        return supplierDAO.addSupplier(supplier);
+    }
+
+    public boolean updateSupplier(Supplier supplier) {
         Validator.requireNotNull(supplier, "Supplier");
         Validator.requireId(supplier.getSupplierId(), "Supplier id");
-        Validator.requireNonBlank(supplier.getSupplierName(), "Supplier name");
-        supplierDAO.updateSupplier(supplier);
+        return supplierDAO.updateSupplier(supplier);
     }
 
-    public void deleteSupplier(long supplierId) {
+    public boolean deleteSupplier(long supplierId) {
         Validator.requireId(supplierId, "Supplier id");
-        supplierDAO.deleteSupplier(supplierId);
+        return supplierDAO.deleteSupplier(supplierId);
     }
 
     public Supplier getSupplier(long supplierId) {
@@ -68,28 +73,23 @@ public class InventoryService {
         return supplierDAO.getAllSuppliers();
     }
 
-    // --- Materials ---
-
-    public void addMaterial(Material material) {
+    public boolean addMaterial(Material material) {
         Validator.requireNotNull(material, "Material");
         Validator.requireNonBlank(material.getMaterialName(), "Material name");
         Validator.requireNonNegative(material.getQuantity(), "Quantity");
         Validator.requireNonNegative(material.getReorderLevel(), "Reorder level");
-        materialDAO.addMaterial(material);
+        return materialDAO.addMaterial(material);
     }
 
-    public void updateMaterial(Material material) {
+    public boolean updateMaterial(Material material) {
         Validator.requireNotNull(material, "Material");
         Validator.requireId(material.getMaterialId(), "Material id");
-        Validator.requireNonBlank(material.getMaterialName(), "Material name");
-        Validator.requireNonNegative(material.getQuantity(), "Quantity");
-        Validator.requireNonNegative(material.getReorderLevel(), "Reorder level");
-        materialDAO.updateMaterial(material);
+        return materialDAO.updateMaterial(material);
     }
 
-    public void deleteMaterial(long materialId) {
+    public boolean deleteMaterial(long materialId) {
         Validator.requireId(materialId, "Material id");
-        materialDAO.deleteMaterial(materialId);
+        return materialDAO.deleteMaterial(materialId);
     }
 
     public Material getMaterial(long materialId) {
@@ -101,29 +101,25 @@ public class InventoryService {
     }
 
     public List<Material> getLowStockMaterials() {
-        return materialDAO.getMaterialsBelowReorderLevel();
+        return materialDAO.getLowStockMaterials();
     }
 
-    // --- Cleaners ---
-
-    public void addCleaner(Cleaner cleaner) {
+    public boolean addCleaner(Cleaner cleaner) {
         Validator.requireNotNull(cleaner, "Cleaner");
         Validator.requireNonBlank(cleaner.getFirstName(), "First name");
         Validator.requireNonBlank(cleaner.getLastName(), "Last name");
-        cleanerDAO.addCleaner(cleaner);
+        return cleanerDAO.addCleaner(cleaner);
     }
 
-    public void updateCleaner(Cleaner cleaner) {
+    public boolean updateCleaner(Cleaner cleaner) {
         Validator.requireNotNull(cleaner, "Cleaner");
         Validator.requireId(cleaner.getCleanerId(), "Cleaner id");
-        Validator.requireNonBlank(cleaner.getFirstName(), "First name");
-        Validator.requireNonBlank(cleaner.getLastName(), "Last name");
-        cleanerDAO.updateCleaner(cleaner);
+        return cleanerDAO.updateCleaner(cleaner);
     }
 
-    public void deleteCleaner(long cleanerId) {
+    public boolean deleteCleaner(long cleanerId) {
         Validator.requireId(cleanerId, "Cleaner id");
-        cleanerDAO.deleteCleaner(cleanerId);
+        return cleanerDAO.deleteCleaner(cleanerId);
     }
 
     public Cleaner getCleaner(long cleanerId) {
@@ -134,50 +130,28 @@ public class InventoryService {
         return cleanerDAO.getAllCleaners();
     }
 
-    // --- Stock issue ---
-
-    /**
-     * Issues stock to a cleaner: validates availability, creates the issue record,
-     * and reduces material quantities in one transaction (handled by DAO).
-     *
-     * @return materials that are at or below reorder level after the issue
-     */
     public List<Material> issueStock(StockIssueHeader stockIssue) {
         Validator.requireNotNull(stockIssue, "Stock issue");
         Validator.requireId(stockIssue.getCleanerId(), "Cleaner id");
         Validator.requireId(stockIssue.getUserId(), "User id");
         Validator.requireNotNull(stockIssue.getItems(), "Issue items");
-
         if (stockIssue.getItems().isEmpty()) {
             throw new IllegalArgumentException("At least one issue item is required");
         }
 
-        if (cleanerDAO.getCleanerById(stockIssue.getCleanerId()) == null) {
-            throw new IllegalArgumentException("Cleaner not found");
+        boolean ok = stockIssueDAO.issueMaterials(
+                stockIssue.getCleanerId(),
+                stockIssue.getUserId(),
+                stockIssue.getItems(),
+                stockIssue.getRemarks());
+        if (!ok) {
+            throw new IllegalArgumentException("Failed to issue stock (check quantities and stock levels)");
         }
-
-        for (StockIssueItem item : stockIssue.getItems()) {
-            Validator.requireId(item.getMaterialId(), "Material id");
-            Validator.requirePositive(item.getQuantity(), "Item quantity");
-
-            Material material = materialDAO.getMaterialById(item.getMaterialId());
-            if (material == null) {
-                throw new IllegalArgumentException("Material not found: " + item.getMaterialId());
-            }
-            if (material.getQuantity() < item.getQuantity()) {
-                throw new IllegalArgumentException(
-                        "Insufficient stock for " + material.getMaterialName()
-                                + " (available: " + material.getQuantity()
-                                + ", requested: " + item.getQuantity() + ")");
-            }
-        }
-
-        stockIssueDAO.createStockIssue(stockIssue);
 
         List<Material> lowStockWarnings = new ArrayList<>();
         for (StockIssueItem item : stockIssue.getItems()) {
             Material updated = materialDAO.getMaterialById(item.getMaterialId());
-            if (updated != null && updated.getQuantity() <= updated.getReorderLevel()) {
+            if (updated != null && updated.isLowStock()) {
                 lowStockWarnings.add(updated);
             }
         }
@@ -185,10 +159,10 @@ public class InventoryService {
     }
 
     public StockIssueHeader getStockIssue(long issueId) {
-        return stockIssueDAO.getStockIssueById(issueId);
+        return stockIssueDAO.getIssuanceById(issueId);
     }
 
     public List<StockIssueHeader> getAllStockIssues() {
-        return stockIssueDAO.getAllStockIssues();
+        return stockIssueDAO.getAllIssuances();
     }
 }

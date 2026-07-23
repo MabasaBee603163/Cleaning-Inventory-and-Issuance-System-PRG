@@ -1,233 +1,263 @@
 package za.ac.belgiumcampus.cleaninginventory.dao.impl;
 
 import za.ac.belgiumcampus.cleaninginventory.dao.StockIssueDAO;
-import za.ac.belgiumcampus.cleaninginventory.database.DBConnection;
 import za.ac.belgiumcampus.cleaninginventory.model.StockIssueHeader;
 import za.ac.belgiumcampus.cleaninginventory.model.StockIssueItem;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Timestamp;
+import za.ac.belgiumcampus.cleaninginventory.database.DBConnection;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class StockIssueDAOImpl implements StockIssueDAO {
 
-    private static final String INSERT_HEADER_SQL =
-            "INSERT INTO stock_issue_headers (cleaner_id, user_id, remarks) VALUES (?, ?, ?)";
-    private static final String INSERT_ITEM_SQL =
-            "INSERT INTO stock_issue_items (issue_id, material_id, quantity) VALUES (?, ?, ?)";
-    private static final String UPDATE_HEADER_SQL =
-            "UPDATE stock_issue_headers SET cleaner_id = ?, user_id = ?, remarks = ? WHERE issue_id = ?";
-    private static final String DELETE_ITEMS_SQL = "DELETE FROM stock_issue_items WHERE issue_id = ?";
-    private static final String DELETE_HEADER_SQL = "DELETE FROM stock_issue_headers WHERE issue_id = ?";
-    private static final String SELECT_HEADER_BY_ID_SQL = "SELECT * FROM stock_issue_headers WHERE issue_id = ?";
-    private static final String SELECT_ITEMS_BY_ISSUE_SQL =
-            "SELECT * FROM stock_issue_items WHERE issue_id = ? ORDER BY issue_item_id";
-    private static final String SELECT_ALL_HEADERS_SQL =
-            "SELECT * FROM stock_issue_headers ORDER BY issue_id DESC";
-    private static final String REDUCE_QUANTITY_SQL =
-            "UPDATE materials SET quantity = quantity - ? WHERE material_id = ? AND quantity >= ?";
-
     @Override
-    public void createStockIssue(StockIssueHeader stockIssue) {
-        if (stockIssue.getItems() == null || stockIssue.getItems().isEmpty()) {
-            throw new IllegalArgumentException("Stock issue must contain at least one item");
-        }
-
+    public boolean issueMaterials(long cleanerId, long userId, List<StockIssueItem> items, String remarks) {
         Connection conn = null;
         try {
             conn = DBConnection.getConnection();
             conn.setAutoCommit(false);
 
+            String checkStockSQL = "SELECT quantity FROM materials WHERE material_id = ?";
+            PreparedStatement checkStockStmt = conn.prepareStatement(checkStockSQL);
+            for (StockIssueItem item : items) {
+                checkStockStmt.setLong(1, item.getMaterialId());
+                ResultSet rs = checkStockStmt.executeQuery();
+                if (rs.next()) {
+                    int currentStock = rs.getInt("quantity");
+                    if (currentStock < item.getQuantity()) {
+                        throw new SQLException("Insufficient stock for material ID: " + item.getMaterialId());
+                    }
+                } else {
+                    throw new SQLException("Material not found: " + item.getMaterialId());
+                }
+                rs.close();
+            }
+            checkStockStmt.close();
+
+            String headerSQL = "INSERT INTO stock_issue_headers (cleaner_id, user_id, remarks) VALUES (?, ?, ?)";
+            PreparedStatement headerStmt = conn.prepareStatement(headerSQL, Statement.RETURN_GENERATED_KEYS);
+            headerStmt.setLong(1, cleanerId);
+            headerStmt.setLong(2, userId);
+            headerStmt.setString(3, remarks);
+            headerStmt.executeUpdate();
+
+            ResultSet headerKeys = headerStmt.getGeneratedKeys();
             long issueId;
-            try (PreparedStatement headerStmt =
-                         conn.prepareStatement(INSERT_HEADER_SQL, Statement.RETURN_GENERATED_KEYS)) {
-                headerStmt.setLong(1, stockIssue.getCleanerId());
-                headerStmt.setLong(2, stockIssue.getUserId());
-                headerStmt.setString(3, stockIssue.getRemarks());
-                headerStmt.executeUpdate();
+            if (headerKeys.next()) {
+                issueId = headerKeys.getLong(1);
+            } else {
+                throw new SQLException("Failed to get issue ID");
+            }
+            headerStmt.close();
 
-                try (ResultSet keys = headerStmt.getGeneratedKeys()) {
-                    if (!keys.next()) {
-                        throw new SQLException("Failed to retrieve generated issue_id");
-                    }
-                    issueId = keys.getLong(1);
-                    stockIssue.setIssueId(issueId);
-                }
+            String itemSQL = "INSERT INTO stock_issue_items (issue_id, material_id, quantity) VALUES (?, ?, ?)";
+            PreparedStatement itemStmt = conn.prepareStatement(itemSQL);
+
+            String updateStockSQL = "UPDATE materials SET quantity = quantity - ? WHERE material_id = ?";
+            PreparedStatement updateStockStmt = conn.prepareStatement(updateStockSQL);
+
+            for (StockIssueItem item : items) {
+                updateStockStmt.setInt(1, item.getQuantity());
+                updateStockStmt.setLong(2, item.getMaterialId());
+                updateStockStmt.executeUpdate();
+
+                itemStmt.setLong(1, issueId);
+                itemStmt.setLong(2, item.getMaterialId());
+                itemStmt.setInt(3, item.getQuantity());
+                itemStmt.addBatch();
             }
 
-            try (PreparedStatement itemStmt =
-                         conn.prepareStatement(INSERT_ITEM_SQL, Statement.RETURN_GENERATED_KEYS);
-                 PreparedStatement reduceStmt = conn.prepareStatement(REDUCE_QUANTITY_SQL)) {
-                for (StockIssueItem item : stockIssue.getItems()) {
-                    itemStmt.setLong(1, issueId);
-                    itemStmt.setLong(2, item.getMaterialId());
-                    itemStmt.setInt(3, item.getQuantity());
-                    itemStmt.executeUpdate();
-
-                    try (ResultSet keys = itemStmt.getGeneratedKeys()) {
-                        if (keys.next()) {
-                            item.setIssueItemId(keys.getLong(1));
-                        }
-                    }
-                    item.setIssueId(issueId);
-
-                    reduceStmt.setInt(1, item.getQuantity());
-                    reduceStmt.setLong(2, item.getMaterialId());
-                    reduceStmt.setInt(3, item.getQuantity());
-                    int updated = reduceStmt.executeUpdate();
-                    if (updated == 0) {
-                        throw new SQLException(
-                                "Insufficient stock for material id " + item.getMaterialId());
-                    }
-                }
-            }
+            itemStmt.executeBatch();
+            itemStmt.close();
+            updateStockStmt.close();
 
             conn.commit();
+            return true;
+
         } catch (SQLException e) {
+            e.printStackTrace();
             if (conn != null) {
                 try {
                     conn.rollback();
-                } catch (SQLException rollbackEx) {
-                    e.addSuppressed(rollbackEx);
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
                 }
             }
-            throw new RuntimeException("Failed to create stock issue: " + e.getMessage(), e);
+            return false;
         } finally {
-            if (conn != null) {
-                try {
-                    conn.setAutoCommit(true);
-                    conn.close();
-                } catch (SQLException closeEx) {
-                    // ignore close errors after commit/rollback
-                }
+            try {
+                if (conn != null) conn.setAutoCommit(true);
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
         }
     }
 
     @Override
-    public void updateStockIssue(StockIssueHeader stockIssue) {
+    public List<StockIssueHeader> getAllIssuances() {
+        List<StockIssueHeader> headers = new ArrayList<>();
+        String query = "SELECT h.*, c.first_name || ' ' || c.last_name as cleaner_name, u.full_name as user_name " +
+                      "FROM stock_issue_headers h " +
+                      "LEFT JOIN cleaners c ON h.cleaner_id = c.cleaner_id " +
+                      "LEFT JOIN users u ON h.user_id = u.user_id " +
+                      "ORDER BY h.issue_date DESC";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(UPDATE_HEADER_SQL)) {
-            stmt.setLong(1, stockIssue.getCleanerId());
-            stmt.setLong(2, stockIssue.getUserId());
-            stmt.setString(3, stockIssue.getRemarks());
-            stmt.setLong(4, stockIssue.getIssueId());
-            stmt.executeUpdate();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            while (rs.next()) {
+                StockIssueHeader header = mapResultSetToHeader(rs);
+                header.setCleanerName(rs.getString("cleaner_name"));
+                header.setUserName(rs.getString("user_name"));
+                headers.add(header);
+            }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to update stock issue: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return headers;
     }
 
     @Override
-    public void deleteStockIssue(long issueId) {
-        Connection conn = null;
-        try {
-            conn = DBConnection.getConnection();
-            conn.setAutoCommit(false);
-
-            try (PreparedStatement deleteItems = conn.prepareStatement(DELETE_ITEMS_SQL)) {
-                deleteItems.setLong(1, issueId);
-                deleteItems.executeUpdate();
-            }
-            try (PreparedStatement deleteHeader = conn.prepareStatement(DELETE_HEADER_SQL)) {
-                deleteHeader.setLong(1, issueId);
-                deleteHeader.executeUpdate();
-            }
-
-            conn.commit();
-        } catch (SQLException e) {
-            if (conn != null) {
-                try {
-                    conn.rollback();
-                } catch (SQLException rollbackEx) {
-                    e.addSuppressed(rollbackEx);
-                }
-            }
-            throw new RuntimeException("Failed to delete stock issue: " + e.getMessage(), e);
-        } finally {
-            if (conn != null) {
-                try {
-                    conn.setAutoCommit(true);
-                    conn.close();
-                } catch (SQLException closeEx) {
-                    // ignore
-                }
-            }
-        }
-    }
-
-    @Override
-    public StockIssueHeader getStockIssueById(long issueId) {
+    public List<StockIssueHeader> getRecentIssuances(int limit) {
+        List<StockIssueHeader> headers = new ArrayList<>();
+        String query = "SELECT h.*, c.first_name || ' ' || c.last_name as cleaner_name, u.full_name as user_name " +
+                      "FROM stock_issue_headers h " +
+                      "LEFT JOIN cleaners c ON h.cleaner_id = c.cleaner_id " +
+                      "LEFT JOIN users u ON h.user_id = u.user_id " +
+                      "ORDER BY h.issue_date DESC LIMIT ?";
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement headerStmt = conn.prepareStatement(SELECT_HEADER_BY_ID_SQL)) {
-            headerStmt.setLong(1, issueId);
-            try (ResultSet rs = headerStmt.executeQuery()) {
-                if (!rs.next()) {
-                    return null;
-                }
-                StockIssueHeader header = mapHeader(rs);
-                header.setItems(loadItems(conn, issueId));
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setInt(1, limit);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                StockIssueHeader header = mapResultSetToHeader(rs);
+                header.setCleanerName(rs.getString("cleaner_name"));
+                header.setUserName(rs.getString("user_name"));
+                headers.add(header);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return headers;
+    }
+
+    @Override
+    public StockIssueHeader getIssuanceById(long issueId) {
+        String query = "SELECT h.*, c.first_name || ' ' || c.last_name as cleaner_name, u.full_name as user_name " +
+                      "FROM stock_issue_headers h " +
+                      "LEFT JOIN cleaners c ON h.cleaner_id = c.cleaner_id " +
+                      "LEFT JOIN users u ON h.user_id = u.user_id " +
+                      "WHERE h.issue_id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, issueId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                StockIssueHeader header = mapResultSetToHeader(rs);
+                header.setCleanerName(rs.getString("cleaner_name"));
+                header.setUserName(rs.getString("user_name"));
                 return header;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get stock issue by id: " + e.getMessage(), e);
+            e.printStackTrace();
         }
+        return null;
     }
 
     @Override
-    public List<StockIssueHeader> getAllStockIssues() {
-        List<StockIssueHeader> issues = new ArrayList<>();
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_ALL_HEADERS_SQL);
-             ResultSet rs = stmt.executeQuery()) {
-            while (rs.next()) {
-                StockIssueHeader header = mapHeader(rs);
-                header.setItems(loadItems(conn, header.getIssueId()));
-                issues.add(header);
-            }
-            return issues;
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to get all stock issues: " + e.getMessage(), e);
-        }
-    }
-
-    private List<StockIssueItem> loadItems(Connection conn, long issueId) throws SQLException {
+    public List<StockIssueItem> getIssueItems(long issueId) {
         List<StockIssueItem> items = new ArrayList<>();
-        try (PreparedStatement stmt = conn.prepareStatement(SELECT_ITEMS_BY_ISSUE_SQL)) {
-            stmt.setLong(1, issueId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    items.add(mapItem(rs));
+        String query = "SELECT i.*, m.material_name FROM stock_issue_items i " +
+                      "LEFT JOIN materials m ON i.material_id = m.material_id " +
+                      "WHERE i.issue_id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, issueId);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                StockIssueItem item = new StockIssueItem();
+                item.setIssueItemId(rs.getLong("issue_item_id"));
+                item.setIssueId(rs.getLong("issue_id"));
+                item.setMaterialId(rs.getLong("material_id"));
+                item.setQuantity(rs.getInt("quantity"));
+                item.setMaterialName(rs.getString("material_name"));
+                Timestamp timestamp = rs.getTimestamp("created_at");
+                if (timestamp != null) {
+                    item.setCreatedAt(timestamp.toLocalDateTime());
                 }
+                items.add(item);
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
         return items;
     }
 
-    private StockIssueHeader mapHeader(ResultSet rs) throws SQLException {
+    @Override
+    public boolean deleteIssuance(long issueId) {
+        Connection conn = null;
+        try {
+            conn = DBConnection.getConnection();
+            conn.setAutoCommit(false);
+
+            String deleteItemsSQL = "DELETE FROM stock_issue_items WHERE issue_id = ?";
+            PreparedStatement deleteItemsStmt = conn.prepareStatement(deleteItemsSQL);
+            deleteItemsStmt.setLong(1, issueId);
+            deleteItemsStmt.executeUpdate();
+            deleteItemsStmt.close();
+
+            String deleteHeaderSQL = "DELETE FROM stock_issue_headers WHERE issue_id = ?";
+            PreparedStatement deleteHeaderStmt = conn.prepareStatement(deleteHeaderSQL);
+            deleteHeaderStmt.setLong(1, issueId);
+            int deleted = deleteHeaderStmt.executeUpdate();
+            deleteHeaderStmt.close();
+
+            conn.commit();
+            return deleted > 0;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            return false;
+        } finally {
+            try {
+                if (conn != null) conn.setAutoCommit(true);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public int getTotalIssuances() {
+        String query = "SELECT COUNT(*) FROM stock_issue_headers";
+        try (Connection conn = DBConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    private StockIssueHeader mapResultSetToHeader(ResultSet rs) throws SQLException {
         StockIssueHeader header = new StockIssueHeader();
         header.setIssueId(rs.getLong("issue_id"));
         header.setCleanerId(rs.getLong("cleaner_id"));
         header.setUserId(rs.getLong("user_id"));
-        Timestamp issueDate = rs.getTimestamp("issue_date");
-        if (issueDate != null) {
-            header.setIssueDate(issueDate.toLocalDateTime());
-        }
         header.setRemarks(rs.getString("remarks"));
+        Timestamp timestamp = rs.getTimestamp("issue_date");
+        if (timestamp != null) {
+            header.setIssueDate(timestamp.toLocalDateTime());
+        }
         return header;
-    }
-
-    private StockIssueItem mapItem(ResultSet rs) throws SQLException {
-        StockIssueItem item = new StockIssueItem();
-        item.setIssueItemId(rs.getLong("issue_item_id"));
-        item.setIssueId(rs.getLong("issue_id"));
-        item.setMaterialId(rs.getLong("material_id"));
-        item.setQuantity(rs.getInt("quantity"));
-        return item;
     }
 }
