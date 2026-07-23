@@ -10,6 +10,20 @@ drop table if exists public.cleaners;
 drop table if exists public.suppliers;
 drop table if exists public.users;
 
+drop sequence if exists public.stock_issue_items_issue_item_id_seq;
+drop sequence if exists public.stock_issue_headers_issue_id_seq;
+drop sequence if exists public.materials_material_id_seq;
+drop sequence if exists public.cleaners_cleaner_id_seq;
+drop sequence if exists public.suppliers_supplier_id_seq;
+drop sequence if exists public.users_user_id_seq;
+
+create sequence public.users_user_id_seq;
+create sequence public.suppliers_supplier_id_seq;
+create sequence public.materials_material_id_seq;
+create sequence public.cleaners_cleaner_id_seq;
+create sequence public.stock_issue_headers_issue_id_seq;
+create sequence public.stock_issue_items_issue_item_id_seq;
+
 -- -------------------------
 -- public.users
 -- -------------------------

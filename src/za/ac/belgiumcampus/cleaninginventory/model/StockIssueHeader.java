@@ -1,29 +1,26 @@
 package za.ac.belgiumcampus.cleaninginventory.model;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
-
-public class StockIssue {
+public class StockIssueHeader {
     private long issueId;
-
     private long cleanerId;
-
     private long userId;
-
     private LocalDateTime issueDate;
-
     private String remarks;
+    private List<StockIssueItem> items = new ArrayList<>();
 
-    public StockIssue() {}
+    public StockIssueHeader() {}
 
-    public StockIssue(long issueId, long cleanerId, long userId, LocalDateTime issueDate, String remarks) {
+    public StockIssueHeader(long issueId, long cleanerId, long userId, LocalDateTime issueDate, String remarks) {
         this.issueId = issueId;
         this.cleanerId = cleanerId;
         this.userId = userId;
         this.issueDate = issueDate;
         this.remarks = remarks;
     }
-
-    //Getters
 
     public long getIssueId() {
         return issueId;
@@ -33,7 +30,7 @@ public class StockIssue {
         return cleanerId;
     }
 
-    public long getUserId() {   
+    public long getUserId() {
         return userId;
     }
 
@@ -45,7 +42,9 @@ public class StockIssue {
         return remarks;
     }
 
-    //Setters
+    public List<StockIssueItem> getItems() {
+        return items;
+    }
 
     public void setIssueId(long issueId) {
         this.issueId = issueId;
@@ -55,7 +54,7 @@ public class StockIssue {
         this.cleanerId = cleanerId;
     }
 
-    public void setUserId(long userId) {   
+    public void setUserId(long userId) {
         this.userId = userId;
     }
 
@@ -67,15 +66,19 @@ public class StockIssue {
         this.remarks = remarks;
     }
 
-    //tostring
+    public void setItems(List<StockIssueItem> items) {
+        this.items = items != null ? items : new ArrayList<>();
+    }
+
     @Override
     public String toString() {
         return "StockIssueHeader{" +
-            "issueId=" + issueId +
-            ", cleanerId=" + cleanerId +
-            ", userId=" + userId +
-            ", issueDate=" + issueDate +
-            ", remarks='" + remarks + '\'' +
-            '}';
+                "issueId=" + issueId +
+                ", cleanerId=" + cleanerId +
+                ", userId=" + userId +
+                ", issueDate=" + issueDate +
+                ", remarks='" + remarks + '\'' +
+                ", items=" + items +
+                '}';
     }
 }

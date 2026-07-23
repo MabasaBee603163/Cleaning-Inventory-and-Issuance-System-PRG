@@ -16,5 +16,7 @@ public interface MaterialDAO {
     List<Material> getAllMaterials();
 
     List<Material> getMaterialsBelowReorderLevel();
+
+    void reduceQuantity(long materialId, int amount);
 }
 

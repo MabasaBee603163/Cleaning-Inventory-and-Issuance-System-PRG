@@ -1,0 +1,10 @@
+# Copy this file to database.properties and fill in your Supabase values.
+# database.properties is gitignored — never commit real credentials.
+#
+# Prefer the Session/Transaction pooler URI from Supabase
+# (Database -> Connect) if direct db.*.supabase.co fails on IPv4-only networks.
+# Pooler username format: postgres.<project-ref>
+
+db.url=jdbc:postgresql://aws-0-YOUR_REGION.pooler.supabase.com:5432/postgres?sslmode=require
+db.username=postgres.YOUR_PROJECT_REF
+db.password=YOUR_PASSWORD

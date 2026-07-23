@@ -45,3 +45,8 @@ desktop.ini
 *.db
 *.sqlite
 *.sqlite3
+**/database.properties
+
+# Local project scope notes (not for backend branch)
+readme.md
+README.md
